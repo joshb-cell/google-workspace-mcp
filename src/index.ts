@@ -233,6 +233,44 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
 			},
 		);
 
+		this.server.tool(
+			"drive_share_file",
+			"Share a file or folder with another person via email. Can set role to reader, commenter, or writer.",
+			{
+				fileId: z.string().describe("The ID of the file or folder to share"),
+				email: z.string().describe("Email address of the person to share with"),
+				role: z.enum(["reader", "commenter", "writer"]).default("reader").describe("Permission level: reader, commenter, or writer"),
+				sendNotification: z.boolean().default(true).describe("Whether to send an email notification to the person"),
+				message: z.string().optional().describe("Optional message to include in the notification email"),
+			},
+			async ({ fileId, email, role, sendNotification, message }) => {
+				const params = new URLSearchParams({
+					sendNotificationEmail: String(sendNotification),
+				});
+				if (message) params.set("emailMessage", message);
+
+				const resp = await googleApiFetch(
+					`https://www.googleapis.com/drive/v3/files/${fileId}/permissions?${params}`,
+					this.props!.googleAccessToken,
+					{
+						method: "POST",
+						body: JSON.stringify({
+							type: "user",
+							role,
+							emailAddress: email,
+						}),
+					},
+				);
+
+				if (!resp.ok) {
+					const error = await resp.text();
+					return { content: [{ type: "text", text: `Error sharing file: ${error}` }], isError: true };
+				}
+
+				return { content: [{ type: "text", text: `Shared with ${email} as ${role}.` }] };
+			},
+		);
+
 		// ===== SHEETS TOOLS =====
 
 		this.server.tool(
